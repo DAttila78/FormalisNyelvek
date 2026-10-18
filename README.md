@@ -40,6 +40,34 @@ Ha nem szeretnénk használni a megadott sablont, helyettesíthetjük bármivel.
 python -m project
 ```
 
+## 2. feladat: véges automata determinizálása
+
+A Python-megoldás a `python-starter` mappából futtatható:
+
+```bash
+cd python-starter
+python -m project --input input_file1.txt --output output_file1.txt --det
+```
+
+A bemeneti fájl első négy sora rendre az állapotokat, az ábécét, a kezdőállapotot
+és a végállapotokat tartalmazza. Ezek után soronként az átmenetek következnek
+`forrásállapot szimbólum célállapot` formában. Minden sorban az elemeket
+szóköz választja el. Például:
+
+```text
+q0 q1 q2
+0 1
+q0
+q2
+q0 0 q1
+q0 0 q2
+q1 1 q2
+```
+
+A program a kezdőállapotból elérhető állapothalmazokat determinizálja, `s0`,
+`s1`, ... jelölést használ, és az eredményt a `--output` fájlba írja. A hiányzó
+átmenetek nem eredményeznek új, üres állapotot.
+
 ## C++ nyelv esetén
 
 C++ esetén a `cpp-starter` nevű mappa tartalmaz egy kiinduló projektet, ami használható a feladatok megoldására.
