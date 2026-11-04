@@ -68,6 +68,23 @@ A program a kezdőállapotból elérhető állapothalmazokat determinizálja, `s
 `s1`, ... jelölést használ, és az eredményt a `--output` fájlba írja. A hiányzó
 átmenetek nem eredményeznek új, üres állapotot.
 
+## 3. feladat: véges automata minimalizálása
+
+A minimalizálás a `python-starter` mappából futtatható:
+
+```bash
+python -m project --input input_file1.txt --output output_file1.txt --mini
+```
+
+A bemeneti fájl követi a 2. feladatban leírt automataformátumot. A program
+minimalizálja a kezdőállapotból elérhető állapotokat, az összevont állapotokat
+az eredeti állapotok sorrendje szerinti legkisebb sorszámukkal nevezi el
+(`s0`, `s1`, ...), és a hiányzó átmeneteket nem írja ki.
+A PDF három példájának bemenete a `python-starter/mini_input1.txt`,
+`mini_input2.txt` és `mini_input3.txt` fájlokban található; a hozzájuk tartozó
+elvárt kimenetek rendre a `mini_output1.txt`, `mini_output2.txt` és
+`mini_output3.txt` fájlokban vannak.
+
 ## C++ nyelv esetén
 
 C++ esetén a `cpp-starter` nevű mappa tartalmaz egy kiinduló projektet, ami használható a feladatok megoldására.
