@@ -1,0 +1,8 @@
+10-15 10:18:51.254   601   601 E InputManager-JNI: java.lang.NullPointerException
+10-15 10:18:51.254   601   601 E InputManager-JNI: 	at java.util.HashMap.putMapEntries(HashMap.java:500)
+10-15 10:18:51.300   221   230 D ExoPlayerImpl: Init 1.0
+10-15 10:18:51.301   221   221 I lowmemorykiller: Using in-kernel low memory killer interface
+10-15 10:18:52.010   300   300 W PackageManager: Unknown permission foo
+10-15 10:19:51.010   300   310 E AndroidRuntime: at com.x.Foo.run(Foo.java:12)
+10-15 10:19:52.010   300   310 I Misc: Thread started
+10-16 11:00:00.000   601   601 E Other: no stack
