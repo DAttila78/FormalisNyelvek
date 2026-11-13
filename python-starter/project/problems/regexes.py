@@ -1,164 +1,165 @@
+import argparse
 import re
+import sys
 from project.problem import Problem
 
-class RegexProblem(Problem):
+# A feladatleírásban megadott, egy logsort felbontó kifejezés.
+#   1: teljes időbélyeg  2: dátum+idő  3: PID  4: TID
+#   5: szint (I D V E F A W)  6: tag  7: üzenet (opcionális)
+LOG_LINE = re.compile(
+    r"(([0-9-]+ [0-9:.]+) +([0-9]+) +([0-9]+) ([IDVEFAW]) (.+?):(?: (.+))?)"
+)
+
+NEWLINE = re.compile(r"\r?\n")
+
+# 1. feladat: az alpontok kifejezései (soronként illesztve, a sor elejétől).
+SUB_PATTERNS = [
+    # 1. az összes sort, amelyik 10. hónap 15-én jött létre
+    re.compile(r"(?:[0-9]{4}-)?10-15 "),
+    # 2. az összes sort, amelyik 10. hónap 15-én 10 óra 18 perc és 51 másodperckor jött létre
+    re.compile(r"(?:[0-9]{4}-)?10-15 10:18:51\b"),
+    # 3. az összes sort, amelyik 51 másodperckor jött létre (mindegy a perc)
+    re.compile(r"[0-9-]+ [0-9]{2}:[0-9]{2}:51\b"),
+    # 4. az összes lowmemorykiller taget tartalmazó sor
+    re.compile(r"[0-9-]+ [0-9:.]+ +[0-9]+ +[0-9]+ [IDVEFAW] lowmemorykiller:"),
+    # 5. az összes 10:18:51 kor keletkező 221-es process id-jú sort
+    re.compile(r"[0-9-]+ 10:18:51\b[0-9.]* +221 +[0-9]+ [IDVEFAW] "),
+    # 6. az összes hibát tartalmazó sort (E)
+    re.compile(r"[0-9-]+ [0-9:.]+ +[0-9]+ +[0-9]+ E "),
+    # 7. az összes warningot (W) amit a PackageManager küld
+    re.compile(r"[0-9-]+ [0-9:.]+ +[0-9]+ +[0-9]+ W PackageManager:"),
+    # 8. az összes ExoPlayer-es debug (D) infót
+    re.compile(r"[0-9-]+ [0-9:.]+ +[0-9]+ +[0-9]+ D .*ExoPlayer"),
+    # 9. az összes java állomány pozíciót tartalmazó hibát és warningot (EW.java:)
+    re.compile(r"[0-9-]+ [0-9:.]+ +[0-9]+ +[0-9]+ [EW] .*\.java:"),
+    # 10. az összes olyan sort, ami tartalmazza a Thread szót a message részben (nem a tagben)
+    re.compile(
+        r"[0-9-]+ [0-9:.]+ +[0-9]+ +[0-9]+ [IDVEFAW] [^:]+:(?: .*)?Thread"
+    ),
+]
+
+# 2. feladat: Valami.java, ahogy a stack trace-ben szerepel.
+JAVA_FILE = re.compile(r"([A-Za-z0-9_$-]+\.java):[0-9]+")
+
+
+def read_lines(path):
+    with open(path, encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    lines = NEWLINE.split(text)
+    if lines and not lines[-1]:
+        lines.pop()
+    return lines
+
+
+def _parse_logs_with_continuation(lines):
     """
-    4. feladat: Android logcat logfájlok elemzése reguláris kifejezésekkel.
+    Segédfüggvény, amely kezeli a több soros logokat (pl. stack trace sorok,
+    melyek nem kezdődnek új log headerrel), így a 2. feladat és a folytatólagos
+    ellenőrzések pontosan illeszkednek.
     """
-    def initialize_parser(self, parser):
-        # Az --input és --output már definiálva van a fő keretrendszerben, 
-        # ezért itt csak a saját --rgx argumentumunkat adjuk hozzá:
-        parser.add_argument('--rgx', type=int, required=True, help='A feladat sorszáma (1-5)')
+    parsed_entries = []
+    current_entry = None
 
-    def is_chosen_problem(self, args) -> bool:
-        return hasattr(args, 'rgx') and args.rgx in [1, 2, 3, 4, 5]
+    for line in lines:
+        match = LOG_LINE.match(line)
+        if match:
+            if current_entry:
+                parsed_entries.append(current_entry)
+            full_header, dt, pid, tid, level, tag, message = match.groups()
+            current_entry = {
+                'pid': pid,
+                'tid': tid,
+                'level': level,
+                'tag': tag.strip(),
+                'message': message if message else "",
+                'raw': line,
+                'continuation': []
+            }
+        else:
+            if current_entry:
+                current_entry['continuation'].append(line)
+    
+    if current_entry:
+        parsed_entries.append(current_entry)
+    return parsed_entries
 
-    def run(self, args) -> int:
-        input_filename = args.input
-        output_filename = args.output
-        task_num = args.rgx
 
+def solve_1(lines):
+    # Az 1. feladat pontról pontra soronként vizsgálja a SUB_PATTERNS elemeit
+    return [
+        str(sum(1 for line in lines if pattern.match(line)))
+        for pattern in SUB_PATTERNS
+    ]
+
+
+def solve_2(lines):
+    """Minden hibasorból (és a hozzá tartozó folytatósorokból/stack trace-ből) kigyűjti a .java állományokat."""
+    entries = _parse_logs_with_continuation(lines)
+    result = []
+    for entry in entries:
+        if entry['level'] == 'E':
+            text_to_check = entry['message'] + ' ' + ' '.join(entry['continuation'])
+            matches = JAVA_FILE.findall(text_to_check)
+            result.extend(matches)
+    return result
+
+
+def parse(lines):
+    return [m for m in (LOG_LINE.match(line) for line in lines) if m]
+
+
+def solve_3(lines):
+    # A 3. feladat az összes különböző PID-t kigyűri az előfordulási sorrendjükben
+    seen = {}
+    for m in parse(lines):
+        seen.setdefault(m.group(3), None)
+    return list(seen)
+
+
+def solve_4(lines):
+    counts = {}
+    for m in parse(lines):
+        if m.group(5) == "E":
+            counts[m.group(3)] = counts.get(m.group(3), 0) + 1
+    if not counts:
+        return []
+    pid = max(counts, key=counts.get)
+    return [f"PID={pid} ({counts[pid]} errors)"]
+
+
+def solve_5(lines):
+    return [str(sum(
+        1 for m in parse(lines)
+        if m.group(5) == "E" and m.group(3) == m.group(4)
+    ))]
+
+
+SOLVERS = {1: solve_1, 2: solve_2, 3: solve_3, 4: solve_4, 5: solve_5}
+
+
+class Rgx(Problem):
+
+    def initialize_parser(self, parser: argparse.ArgumentParser):
+        parser.add_argument('--rgx', type=int, metavar='TASK',
+                            help='regex task number (1-5)')
+
+    def is_chosen_problem(self, args):
+        return getattr(args, 'rgx', None) is not None
+
+    def run(self, args):
+        if not args.input or not args.output:
+            print("Hiba: az --input és --output megadása kötelező.",
+                  file=sys.stderr)
+            sys.exit(1)
+        solver = SOLVERS.get(args.rgx)
+        if solver is None:
+            print(f"Hiba: ismeretlen feladatszám: {args.rgx}", file=sys.stderr)
+            sys.exit(1)
         try:
-            with open(input_filename, 'r', encoding='utf-8', errors='ignore') as f:
-                lines = [line.rstrip('\r\n') for line in f]
-        except Exception as e:
-            print(f"Hiba a bemeneti fájl olvasásakor: {e}")
-            return 1
-
-        results = []
-        if task_num == 1:
-            results = self._solve_task_1(lines)
-        elif task_num == 2:
-            results = self._solve_task_2(lines)
-        elif task_num == 3:
-            results = self._solve_task_3(lines)
-        elif task_num == 4:
-            results = self._solve_task_4(lines)
-        elif task_num == 5:
-            results = self._solve_task_5(lines)
-
-        try:
-            with open(output_filename, 'w', encoding='utf-8') as f:
-                for res in results:
-                    f.write(str(res) + '\n')
-        except Exception as e:
-            print(f"Hiba a kimeneti fájl írásakor: {e}")
-            return 1
-
-        return 0
-
-    def _parse_logs(self, lines):
-        log_pattern = re.compile(r'^(\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2}\.\d{3})\s+(\d+)\s+(\d+)\s+([IDVEFAW])\s+([^:]+):\s*(.*)$')
-        
-        parsed_entries = []
-        current_entry = None
-
-        for line in lines:
-            match = log_pattern.match(line)
-            if match:
-                if current_entry:
-                    parsed_entries.append(current_entry)
-                date, time, pid, tid, level, tag, message = match.groups()
-                current_entry = {
-                    'date': date,
-                    'time': time,
-                    'pid': pid,
-                    'tid': tid,
-                    'level': level,
-                    'tag': tag.strip(),
-                    'message': message,
-                    'raw': line,
-                    'continuation': []
-                }
-            else:
-                if current_entry:
-                    current_entry['continuation'].append(line)
-        
-        if current_entry:
-            parsed_entries.append(current_entry)
-        return parsed_entries
-
-    def _solve_task_1(self, lines):
-        entries = self._parse_logs(lines)
-        c1 = c2 = c3 = c4 = c5 = c6 = c7 = c8 = c9 = c10 = 0
-        java_pattern = re.compile(r'\.java:')
-
-        for entry in entries:
-            date = entry['date']
-            time = entry['time']
-            pid = entry['pid']
-            level = entry['level']
-            tag = entry['tag']
-            message = entry['message']
-            continuation = entry['continuation']
-
-            if date == '10-15':
-                c1 += 1
-            if date == '10-15' and time.startswith('10:18:51'):
-                c2 += 1
-            if re.match(r'^\d{2}:\d{2}:51\.', time):
-                c3 += 1
-            if 'lowmemorykiller' in tag.lower():
-                c4 += 1
-            if time.startswith('10:18:51') and pid == '221':
-                c5 += 1
-            if level == 'E':
-                c6 += 1
-            if level == 'W' and tag == 'PackageManager':
-                c7 += 1
-            if level == 'D' and ('ExoPlayer' in tag or 'ExoPlayer' in message):
-                c8 += 1
-            if level in ('E', 'W'):
-                if java_pattern.search(message) or any(java_pattern.search(cl) for cl in continuation):
-                    c9 += 1
-            if 'Thread' in message:
-                c10 += 1
-
-        return [c1, c2, c3, c4, c5, c6, c7, c8, c9, c10]
-
-    def _solve_task_2(self, lines):
-        entries = self._parse_logs(lines)
-        java_file_pattern = re.compile(r'([a-zA-Z0-9_]+\.java):\d+')
-        results = []
-
-        for entry in entries:
-            if entry['level'] == 'E':
-                text_to_check = entry['message'] + ' ' + ' '.join(entry['continuation'])
-                matches = java_file_pattern.findall(text_to_check)
-                results.extend(matches)
-
-        return results
-
-    def _solve_task_3(self, lines):
-        entries = self._parse_logs(lines)
-        seen = set()
-        pids = []
-        for entry in entries:
-            pid = entry['pid']
-            if pid not in seen:
-                seen.add(pid)
-                pids.append(pid)
-        return pids
-
-    def _solve_task_4(self, lines):
-        entries = self._parse_logs(lines)
-        error_counts = {}
-        for entry in entries:
-            if entry['level'] == 'E':
-                pid = entry['pid']
-                error_counts[pid] = error_counts.get(pid, 0) + 1
-
-        if not error_counts:
-            return ["Nincs hiba"]
-
-        max_pid = max(error_counts, key=error_counts.get)
-        max_count = error_counts[max_pid]
-        return [f"{max_pid}={max_count} ({max_count} errors)"]
-
-    def _solve_task_5(self, lines):
-        entries = self._parse_logs(lines)
-        count = 0
-        for entry in entries:
-            if entry['level'] == 'E' and entry['pid'] == entry['tid']:
-                count += 1
-        return [count]
+            lines = read_lines(args.input)
+            result = solver(lines)
+            with open(args.output, "w", encoding="utf-8", newline="\n") as f:
+                f.write("".join(item + "\n" for item in result))
+        except OSError as e:
+            print(f"Hiba: {e}", file=sys.stderr)
+            sys.exit(1)
